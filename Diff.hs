@@ -1,5 +1,8 @@
 import System.Process
 import Text.Parsec
+
+module Diff (rawDiff, assembleDiff, parseDiff) where
+
 rawDiff :: FilePath -> FilePath -> IO String
 rawDiff old new = do 
     (_,out,_) <- readProcessWithExitCode "diff" [old,new] ""
