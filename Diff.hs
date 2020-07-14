@@ -1,7 +1,6 @@
+module Diff (rawDiff, assembleDiff, parseDiff) where
 import System.Process
 import Text.Parsec
-
-module Diff (rawDiff, assembleDiff, parseDiff) where
 
 rawDiff :: FilePath -> FilePath -> IO String
 rawDiff old new = do 
@@ -32,9 +31,9 @@ assembleDiff diff = return $ concatStrings mapped
                                   then (handleChanges xs "> ") 
                                   else (prefix ++ x ++ "\n" ++ (handleChanges xs prefix))
 
-parseDiff :: IO String -> IO (Maybe Diff)
-parseDiff rawDiffIO = do 
-    rawDiff <- rawDiffIO 
+parseDiff :: String -> IO (Maybe Diff)
+parseDiff rawDiff = do 
+    -- rawDiff <- rawDiffIO 
     let eitherDiff = runParser pDiff () "" rawDiff
         result = processEither eitherDiff
     return result
