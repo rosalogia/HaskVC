@@ -74,7 +74,8 @@ directoryToTree parent = do
 
 -- Turns list containing monad-wrapped values into
 -- a monad-wrapped list of values. Need this for processContents,
--- since mapping it to a list returns the former.
+-- since mapping it to a list returns the former. Dislike this
+-- solution; would prefer a processContents that doesn't need this.
 unwrapListMonads :: Monad m => [m a] -> m [a]
 unwrapListMonads (m:ms) = do
     entry <- m
