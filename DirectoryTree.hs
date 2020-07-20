@@ -1,3 +1,4 @@
+module DirectoryTree (directoryToTree, getInode) where
 import System.Directory
 import System.Process
 import Data.Tree
