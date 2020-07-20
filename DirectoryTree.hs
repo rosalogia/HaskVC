@@ -25,25 +25,33 @@ getInode path = do
 listSubEntries :: FilePath -> IO [String]
 listSubEntries path = do
     isDirectory <- doesDirectoryExist path
-    if isDirectory then (listDirectory path) >>= (\x -> return $ map fullPaths x) else return []
-    where
-        fullPaths :: String -> String
-        fullPaths name = path ++ "/" ++ name
+    if isDirectory then listDirectory path else return []
 
 type FileID = (Integer, String)
 
 -- Turns directory into Tree FileID
 directoryToTree :: FilePath -> IO (Tree FileID)
 directoryToTree path = do
-    -- Grabs the contents of the directory as a list, then maps
-    -- directoryToTree to it to turn the entries into trees
     inode <- getInode path
     entryContents <- listSubEntries path
 
-    let subTreesMonadic = map directoryToTree entryContents
+    let subTreesMonadic = map (subDirectoryToTree path) entryContents
     subTrees <- unwrapListMonads subTreesMonadic
 
     return $ Node (inode, path) subTrees
+
+subDirectoryToTree :: FilePath -> FilePath -> IO (Tree FileID)
+subDirectoryToTree pathAccum entry = do
+    -- Grabs the contents of the directory as a list, then maps
+    -- directoryToTree to it to turn the entries into trees
+    let absPath = pathAccum ++ "/" ++ entry
+    inode <- getInode absPath
+    entryContents <- listSubEntries absPath
+
+    let subTreesMonadic = map (subDirectoryToTree absPath) entryContents
+    subTrees <- unwrapListMonads subTreesMonadic
+
+    return $ Node (inode, entry) subTrees
 
 -- Turns list containing monad-wrapped values into
 -- a monad-wrapped list of values. Need this for directoryToTree,
@@ -55,6 +63,5 @@ unwrapListMonads (m:ms) = do
     remaining <- unwrapListMonads ms
     return (entry:remaining)
 unwrapListMonads [] = return []
-
 
 
