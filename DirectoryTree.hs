@@ -64,4 +64,51 @@ unwrapListMonads (m:ms) = do
     return (entry:remaining)
 unwrapListMonads [] = return []
 
+pathToList :: FilePath -> [FilePath]
+pathToList path = splitBySlash path "" []
+    where
+    splitBySlash (char:rem) word list 
+        | char == '/' = splitBySlash rem "" (list ++ word)
+        | (char:rem) == "" = list
+        | otherwise = splitBySlash rem (word ++ [char]) list
+
+listToPath :: [FilePath] -> FilePath
+listToPath pathList = foldl ("/"++) pathList
+
+rmMatchHead :: Eq a => [a] -> [a] -> [a]
+rmMatchHead (a1:as1) (a2:as2) 
+    | a1 == a2 = rmMatchHeaad as1 as2
+    | otherwise = (a2:as2)
+
+getID :: FilePath -> FileID
+getID path = (getInode path, tail . pathToList $ path)
+
+listToTree :: [FilePath] -> [FilePath] -> Tree FileID
+listToTree root (entry:[]) = Node entry []
+listToTree root (entry:rem) = Node (getID . listToPath $ root++entry) [listToTree (root ++ entry) rem]
+
+extractMatchingName :: FilePath -> [Tree FileID] -> Maybe ([Tree FileID], Tree FileID)
+extractMatchingName target list = helper target [] list 
+    where
+    helper _ _ [] = Nothing
+    helper tar passed (current:left) = 
+        let (Node (_,name) _) = current
+        in if name == tar 
+           then Just (passed++left, current)
+           else helper tar (passed++[current]) left
+{-
+addTreeEntry :: FileID -> Tree FileID -> Tree FileID
+addTreeEntry p t = addEntry unrootedPath r t
+    where
+    Node (_,r) _ = t
+    unrootedPath = rmMatchHead (pathToList r) (pathToList p)
+
+    addEntry (entry:rem) passed tree =
+        let Node r treeList = tree
+            (_, parent) = r
+            extraction = extractMatchingName entry treeList
+        in if extraction == Nothing
+           then Node r (treeList ++ [listToTree passed (entry:rem)])
+-}
+
 
