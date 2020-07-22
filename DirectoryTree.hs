@@ -11,8 +11,14 @@ drawDirectoryTree path = do
 
 drawableDirectoryToTree :: FilePath -> IO (Tree String)
 drawableDirectoryToTree path = do
-    unformated <- directoryToTree path
-    return unformated
+    dirTree <- directoryToTree path
+    let stringTree = dirTreeToTree dirTree
+    return stringTree
+
+dirTreeToTree :: DirTree -> Tree String
+dirTreeToTree (File i s) = Node ((show i)++ " " ++ s) []
+dirTreeToTree (Directory s []) = Node s []
+dirTreeToTree (Directory s tl) = Node s (map dirTreeToTree tl)
 
 -- Equivalent to doesDirectoryExist but returns [] for files
 listSubEntries :: FilePath -> IO [String]
@@ -20,29 +26,38 @@ listSubEntries path = do
     isDirectory <- doesDirectoryExist path
     if isDirectory then listDirectory path else return []
 
-type FileID = String
+data DirTree = Directory String [DirTree] | File Integer String
 
 -- Turns directory into Tree FileID
-directoryToTree :: FilePath -> IO (Tree FileID)
+directoryToTree :: FilePath -> IO DirTree
 directoryToTree path = do
     entryContents <- listSubEntries path
 
-    let subTreesMonadic = map (subDirectoryToTree path) entryContents
+    let subTreesMonadic = map (processNodeType path) entryContents
     subTrees <- unwrapListMonads subTreesMonadic
 
-    return $ Node path subTrees
+    return $ Directory path subTrees
 
-subDirectoryToTree :: FilePath -> FilePath -> IO (Tree FileID)
+subDirectoryToTree :: FilePath -> FilePath -> IO DirTree
 subDirectoryToTree pathAccum entry = do
     -- Grabs the contents of the directory as a list, then maps
     -- directoryToTree to it to turn the entries into trees
     let absPath = pathAccum ++ "/" ++ entry
     entryContents <- listSubEntries absPath
 
-    let subTreesMonadic = map (subDirectoryToTree absPath) entryContents
+    let subTreesMonadic = map (processNodeType absPath) entryContents
     subTrees <- unwrapListMonads subTreesMonadic
 
-    return $ Node entry subTrees
+    return $ Directory entry subTrees
+
+fileToTree :: FilePath -> IO DirTree
+fileToTree name = return $ File 0 name
+
+processNodeType :: FilePath -> FilePath -> IO DirTree
+processNodeType path entry = do
+    let absPath = path ++ "/" ++ entry
+    dir <- doesDirectoryExist absPath
+    if dir then subDirectoryToTree path entry else fileToTree entry
 
 -- Turns list containing monad-wrapped values into
 -- a monad-wrapped list of values. Need this for directoryToTree,
@@ -73,36 +88,40 @@ rmMatchHead (a1:as1) (a2:as2)
     | a1 == a2 = rmMatchHead as1 as2
     | otherwise = (a2:as2)
 
-listToTree :: [FilePath] -> Tree FileID
-listToTree (entry:[]) = Node entry []
-listToTree (entry:rem) = 
-    Node (entry) [listToTree rem]
+listToTree :: Bool -> [FilePath] -> DirTree
+listToTree False (entry:[]) = File 0 entry
+listToTree True  (entry:[]) = Directory entry []
+listToTree f (entry:rem) = 
+    Directory (entry) [listToTree f rem]
 
-extractMatchingName :: FilePath -> [Tree FileID] -> Maybe ([Tree FileID], Tree FileID)
-extractMatchingName target list = helper target [] list 
+getNodeName :: DirTree -> String
+getNodeName (Directory name _) = name
+getNodeName (File _ name) = name
+
+pullDir :: FilePath -> [DirTree] -> Maybe ([DirTree], DirTree)
+pullDir target list = helper target [] list 
     where
     helper _ _ [] = Nothing
-    helper tar passed (current:left) = 
-        let (Node name _) = current
-        in if name == tar 
-           then Just (passed++left, current)
-           else helper tar (passed++[current]) left
+    helper tar passed ((File i n):left) = helper tar ((File i n):passed) left
+    helper tar passed ((Directory name l):left)
+        | name == tar = Just (passed ++ left, (Directory name l))
+        | otherwise   = helper tar ((Directory name l):passed) left
 
-addTreeEntry :: FileID -> Tree FileID -> Tree FileID
-addTreeEntry p t = addEntry unrootedPath t
+addTreeEntry :: Bool -> FilePath -> DirTree -> DirTree
+addTreeEntry filetype p t = addEntry unrootedPath t
     where
-    Node r _ = t
+    r = getNodeName t
     unrootedPath = rmMatchHead (pathToList r) (pathToList p)
     
-    addEntry :: [FilePath] -> Tree FileID -> Tree FileID
-    addEntry (entry:rem) tree =
-        let Node name treeList = tree
-            extracted = extractMatchingName entry treeList
+    addEntry :: [FilePath] -> DirTree -> DirTree
+    addEntry (entry:rem) (Directory name contents) =
+        let extracted = pullDir entry contents
 
-            processExtraction :: Maybe ([Tree FileID], Tree FileID) ->  Tree FileID
-            processExtraction Nothing = Node name $ (listToTree (entry:rem)):treeList
+            processExtraction :: Maybe ([DirTree], DirTree) -> DirTree
+            processExtraction Nothing = Directory name $ (listToTree filetype (entry:rem)):contents
             processExtraction (Just (filteredTrees, extraction)) = 
-                Node name $ (addEntry rem extraction):filteredTrees 
+                Directory name $ (addEntry rem extraction):filteredTrees 
+
         in processExtraction extracted
 
 
