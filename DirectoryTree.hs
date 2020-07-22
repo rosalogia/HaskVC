@@ -3,11 +3,7 @@ import System.Directory
 import System.Process
 import Data.Tree
 
-outputTree :: IO (Tree String) -> IO ()
-outputTree t = do
-    tree <- t
-    putStrLn . drawTree $ tree
-
+-- Debugging functions
 drawDirectoryTree :: FilePath -> IO ()
 drawDirectoryTree path = do
     st <- drawableDirectoryToTree path
@@ -18,6 +14,7 @@ drawableDirectoryToTree path = do
     unformated <- directoryToTree path
     return unformated
 
+-- Equivalent to doesDirectoryExist but returns [] for files
 listSubEntries :: FilePath -> IO [String]
 listSubEntries path = do
     isDirectory <- doesDirectoryExist path
@@ -76,13 +73,10 @@ rmMatchHead (a1:as1) (a2:as2)
     | a1 == a2 = rmMatchHead as1 as2
     | otherwise = (a2:as2)
 
-getID :: FilePath -> FileID
-getID path = last . pathToList $ path
-
-listToTree :: [FilePath] -> [FilePath] -> Tree FileID
-listToTree root (entry:[]) = Node entry []
-listToTree root (entry:rem) = 
-    Node (entry) [listToTree (root ++ [entry]) rem]
+listToTree :: [FilePath] -> Tree FileID
+listToTree (entry:[]) = Node entry []
+listToTree (entry:rem) = 
+    Node (entry) [listToTree rem]
 
 extractMatchingName :: FilePath -> [Tree FileID] -> Maybe ([Tree FileID], Tree FileID)
 extractMatchingName target list = helper target [] list 
@@ -95,20 +89,20 @@ extractMatchingName target list = helper target [] list
            else helper tar (passed++[current]) left
 
 addTreeEntry :: FileID -> Tree FileID -> Tree FileID
-addTreeEntry p t = addEntry unrootedPath (pathToList r) t
+addTreeEntry p t = addEntry unrootedPath t
     where
     Node r _ = t
     unrootedPath = rmMatchHead (pathToList r) (pathToList p)
     
-    addEntry :: [FilePath] -> [FilePath] -> Tree FileID -> Tree FileID
-    addEntry (entry:rem) passed tree =
+    addEntry :: [FilePath] -> Tree FileID -> Tree FileID
+    addEntry (entry:rem) tree =
         let Node name treeList = tree
             extracted = extractMatchingName entry treeList
 
             processExtraction :: Maybe ([Tree FileID], Tree FileID) ->  Tree FileID
-            processExtraction Nothing = Node name $ (listToTree passed (entry:rem)):treeList
+            processExtraction Nothing = Node name $ (listToTree (entry:rem)):treeList
             processExtraction (Just (filteredTrees, extraction)) = 
-                Node name $ (addEntry rem (passed ++ [entry]) extraction):filteredTrees 
+                Node name $ (addEntry rem extraction):filteredTrees 
         in processExtraction extracted
 
 
