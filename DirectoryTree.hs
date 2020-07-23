@@ -124,4 +124,19 @@ addTreeEntry filetype p t = addEntry unrootedPath t
 
         in processExtraction extracted
 
+deleteTreeEntry :: FilePath -> DirTree -> Maybe DirTree
+deleteTreeEntry p t = delEntry unrootedPath t
+    where
+    r = getNodeName t
+    unrootedPath = rmMatchHead (pathToList r) (pathToList p)
+    
+    delEntry :: [FilePath] -> DirTree -> Maybe DirTree
 
+    delEntry (entry:[])  (Directory name contents) = do
+        (filteredTrees, extraction) <- pullDir entry contents
+        return $ Directory name filteredTrees
+
+    delEntry (entry:rem) (Directory name contents) = do
+        (filteredTrees, extraction) <- pullDir entry contents
+        delTree <- delEntry rem extraction
+        return $ Directory name $ (delTree):filteredTrees
