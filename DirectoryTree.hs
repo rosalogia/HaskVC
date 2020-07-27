@@ -1,4 +1,4 @@
-module DirectoryTree (directoryToTree, addTreeEntry) where
+module DirectoryTree (directoryToTree, addTreeEntry, deleteTreeEntry) where
 import System.Directory
 import System.Process
 import Data.Tree
@@ -76,38 +76,11 @@ listToPath :: [FilePath] -> FilePath
 listToPath pathList = foldl (++) "" $ map (\x -> "/" ++ x) pathList
 
 -- Removes first list from beginning of second list
-rmMatchHead :: Eq a => [a] -> [a] -> [a]
+rmMatchHead :: String -> String -> String
 rmMatchHead [] as2 = as2
 rmMatchHead (a1:as1) (a2:as2) 
     | a1 == a2 = rmMatchHead as1 as2
     | otherwise = (a2:as2)
-
--- Get the name of a DirTree
-getNodeName :: DirTree -> String
-getNodeName (Directory name _) = name
-getNodeName (File _ name) = name
-
--- Extracts a directory from a list of DirTree if it has
--- the target name. Equals nothing if no match is found,
--- ignores files.
-pullDir :: FilePath -> [DirTree] -> Maybe ([DirTree], DirTree)
-pullDir target list = helper target [] list 
-    where
-    helper _ _ [] = Nothing
-    helper tar passed ((File i n):left) = helper tar ((File i n):passed) left
-    helper tar passed ((Directory name l):left)
-        | name == tar = Just (passed ++ left, (Directory name l))
-        | otherwise   = helper tar ((Directory name l):passed) left
-
--- Extracts an entry from a list of DirTree similarly
--- to pullDir, but is capable of extracitng a file
-pullEntry :: FilePath -> [DirTree] -> Maybe ([DirTree], DirTree)
-pullEntry target list = helper target [] list 
-    where
-    helper _ _ [] = Nothing
-    helper tar passed (entry:left)
-        | getNodeName entry == tar = Just (passed ++ left, entry)
-        | otherwise                = helper tar (entry:passed) left
 
 -- Adds entry to tree. First filepath is the absolute
 -- path of the directory described by the given tree.
@@ -130,6 +103,18 @@ addTreeEntry ftype p t = addEntry (pathToList p) t
     listToTree (entry:rem) = 
         Directory (entry) [listToTree rem]
 
+    -- Extracts a directory from a list of DirTree if it has
+    -- the target name. Equals nothing if no match is found,
+    -- ignores files.
+    pullDir :: FilePath -> [DirTree] -> Maybe ([DirTree], DirTree)
+    pullDir target list = helper target [] list 
+        where
+        helper _ _ [] = Nothing
+        helper tar passed ((File i n):left) = helper tar ((File i n):passed) left
+        helper tar passed ((Directory name l):left)
+            | name == tar = Just (passed ++ left, (Directory name l))
+            | otherwise   = helper tar ((Directory name l):passed) left
+
 -- Deletes entry from tree. Returns nothing if entry isn't part of tree
 deleteTreeEntry :: FilePath -> DirTree -> Maybe DirTree
 deleteTreeEntry p t = delEntry (pathToList p) t
@@ -143,3 +128,20 @@ deleteTreeEntry p t = delEntry (pathToList p) t
         (filteredTrees, extraction) <- pullEntry entry contents
         delTree <- delEntry rem extraction
         return $ Directory name $ (delTree):filteredTrees
+
+    -- Extracts an entry from a list of DirTree similarly
+    -- to pullDir, but is capable of extracitng a file
+    pullEntry :: FilePath -> [DirTree] -> Maybe ([DirTree], DirTree)
+    pullEntry target list = helper target [] list 
+        where
+        helper _ _ [] = Nothing
+        helper tar passed (entry:left)
+            | getNodeName entry == tar = Just (passed ++ left, entry)
+            | otherwise                = helper tar (entry:passed) left
+    -- Get the name of a DirTree
+    getNodeName :: DirTree -> String
+    getNodeName (Directory name _) = name
+    getNodeName (File _ name) = name
+
+
+
