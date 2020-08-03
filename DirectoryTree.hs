@@ -14,11 +14,6 @@ dirTreeToTree (File i s) = Node ((show i)++ " " ++ s) []
 dirTreeToTree (Directory s []) = Node s []
 dirTreeToTree (Directory s tl) = Node s (map dirTreeToTree tl)
 
--- Equivalent to doesDirectoryExist but returns [] for files
-listSubEntries :: FilePath -> IO [String]
-listSubEntries path = do
-    isDirectory <- doesDirectoryExist path
-    if isDirectory then listDirectory path else return []
 
 -- Directory tree data structure
 data DirTree = Directory String [DirTree] | File Integer String
@@ -49,11 +44,15 @@ directoryToTree path = entryToTree path ""
     fileToTree :: FilePath -> IO DirTree
     fileToTree name = return $ File 0 name
 
-    -- Turns list containing monad-wrapped values into
-    -- a monad-wrapped list of values. Need this for directoryToTree,
-    -- since mapping it to a list returns the former. Dislike this
-    -- solution; would prefer a directoryToTree that doesn't need this.
-    unwrapListMonads :: Monad m => [m a] -> m [a]
+    -- Equivalent to doesDirectoryExist but returns [] for files
+    listSubEntries :: FilePath -> IO [String]
+    listSubEntries path = do
+        isDirectory <- doesDirectoryExist path
+        if isDirectory then listDirectory path else return []
+
+    -- Turns list containing IO wrapped values into
+    -- a IO wrapped list of values. 
+    unwrapListMonads :: [IO a] -> IO [a]
     unwrapListMonads (m:ms) = do
         entry <- m
         remaining <- unwrapListMonads ms
@@ -63,24 +62,14 @@ directoryToTree path = entryToTree path ""
 -- Turns path string into list of entries
 -- i.e. pathToList "/home/user" == ["home","user]
 pathToList :: FilePath -> [String]
-pathToList path = tail $ splitBySlash path "" []
+pathToList path = splitBySlash path "" []
     where
     splitBySlash :: FilePath -> String -> [FilePath] -> [FilePath]
     splitBySlash "" word list = list ++ [word]
     splitBySlash (char:rem) word list 
+        | char == '/' && list == [] = splitBySlash rem "" list
         | char == '/' = splitBySlash rem "" (list ++ [word])
         | otherwise = splitBySlash rem (word ++ [char]) list
-
--- Turns path list back to path string
-listToPath :: [FilePath] -> FilePath
-listToPath pathList = foldl (++) "" $ map (\x -> "/" ++ x) pathList
-
--- Removes first list from beginning of second list
-rmMatchHead :: String -> String -> String
-rmMatchHead [] as2 = as2
-rmMatchHead (a1:as1) (a2:as2) 
-    | a1 == a2 = rmMatchHead as1 as2
-    | otherwise = (a2:as2)
 
 -- Adds entry to tree. First filepath is the absolute
 -- path of the directory described by the given tree.
@@ -138,6 +127,7 @@ deleteTreeEntry p t = delEntry (pathToList p) t
         helper tar passed (entry:left)
             | getNodeName entry == tar = Just (passed ++ left, entry)
             | otherwise                = helper tar (entry:passed) left
+
     -- Get the name of a DirTree
     getNodeName :: DirTree -> String
     getNodeName (Directory name _) = name
