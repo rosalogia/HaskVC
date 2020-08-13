@@ -1,0 +1,71 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 446ce7c726b0042943ece4f50b3b960da752a6d57f67b63852618f4a74aa2e8f
+
+name:           haskvc
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/fshcat/haskvc#readme>
+homepage:       https://github.com/fshcat/haskvc#readme
+bug-reports:    https://github.com/fshcat/haskvc/issues
+author:         Fishcat & Ambika Nair
+maintainer:     rosalogia@protonmail.ch
+copyright:      2020 Fishcat & Ambika Nair
+license:        BSD3
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/fshcat/haskvc
+
+library
+  exposed-modules:
+      Diff
+      DirectoryTree
+  other-modules:
+      Paths_haskvc
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , containers ==0.6.2.1
+    , directory ==1.3.6.0
+    , parsec ==3.1.14.0
+    , process ==1.6.10.0
+  default-language: Haskell2010
+
+executable haskvc-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_haskvc
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , containers ==0.6.2.1
+    , directory ==1.3.6.0
+    , haskvc
+    , parsec ==3.1.14.0
+    , process ==1.6.10.0
+  default-language: Haskell2010
+
+test-suite haskvc-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_haskvc
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , containers ==0.6.2.1
+    , directory ==1.3.6.0
+    , haskvc
+    , parsec ==3.1.14.0
+    , process ==1.6.10.0
+  default-language: Haskell2010
