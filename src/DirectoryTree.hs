@@ -2,6 +2,9 @@ module DirectoryTree (directoryToTree, addTreeEntry, deleteTreeEntry) where
 import System.Directory
 import System.Process
 import Data.Tree
+import Data.Time
+import Data.Time.LocalTime
+import Data.List.Split
 
 -- Debugging functions
 drawDirectoryTree :: FilePath -> IO ()
@@ -17,6 +20,45 @@ dirTreeToTree (Directory s tl) = Node s (map dirTreeToTree tl)
 
 -- Directory tree data structure
 data DirTree = Directory String [DirTree] | File Integer String
+
+
+lastModified :: FilePath -> IO LocalTime
+lastModified fpath = do 
+    (_,out,_) <- readProcessWithExitCode "stat" [fpath, "-c %y"] ""
+
+    let (dateString:timeString:_) = words out
+    
+    let timestamp = head $ splitOn "." $ timeString
+
+    parsedDate <- parseTimeM True defaultTimeLocale "%Y-%0m-%0d" dateString :: IO Day
+
+    parsedTimeOfDay <- parseTimeM True defaultTimeLocale "%T" timestamp :: IO TimeOfDay
+
+    return $ LocalTime parsedDate parsedTimeOfDay
+
+
+-- Compares two directory trees for changes
+compareDirectoryTrees :: LocalTime -> DirTree -> FilePath -> IO ([String], [String], [String])
+compareDirectoryTrees lastCommit commitTree currentRoot = runComparison commitTree currentTree
+    where
+        currentTree = directoryToTree currentRoot
+
+        reduceUpdateTriples :: [([String], [String], [String])] -> ([String], [String], [String])
+        reduceUpdateTriples triples = foldl (\(a1,b1,c1),(a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[])
+
+
+        runComparison :: DirTree -> DirTree -> IO ([String], [String], [String])
+        runComparison (File id1 name1) (File id2 name2) = do
+            fileModDate <- lastModified name2
+            if name1 == name2 && lastCommit >= fileModDate then
+                return ([], [], [])
+            else if name1 == name2 && lastCommit < fileModDate then
+                return ([], [name2], [])
+            else if name1 /= name2 then
+                return ([name2], [], [name1])
+        runComparison (Directory path1 contents1) (Directory path2 contents2) = do
+            return $ reduceUpdateTriples $ map runComparison contents1 contents2
+            
 
 -- Turns directory into Tree FileID
 directoryToTree :: FilePath -> IO DirTree
