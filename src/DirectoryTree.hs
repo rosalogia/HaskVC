@@ -44,44 +44,42 @@ compareDirectoryTrees lastCommit commitTree currentRoot = runComparison commitTr
         currentTree = directoryToTree currentRoot
 
         reduceUpdateTriples :: [([String], [String], [String])] -> ([String], [String], [String])
-        reduceUpdateTriples triples = foldl (\(a1,b1,c1),(a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[])
+        reduceUpdateTriples triples = foldl (\(a1,b1,c1) (a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[])
 
 
         runComparison :: DirTree -> DirTree -> IO ([String], [String], [String])
         runComparison (File id1 name1) (File id2 name2) = do
             fileModDate <- lastModified name2
             if name1 == name2 && lastCommit >= fileModDate then
-                return ([], [], [])
+                 return ([], [], [])
             else if name1 == name2 && lastCommit < fileModDate then
-                return ([], [name2], [])
-            else if name1 /= name2 then
-                return ([name2], [], [name1])
+                 return ([], [name2], [])
+            else return ([name2], [], [name1])
         runComparison (Directory path1 contents1) (Directory path2 contents2) = do
             return $ reduceUpdateTriples $ map runComparison contents1 contents2
             
 
 -- Turns directory into Tree FileID
 directoryToTree :: FilePath -> IO DirTree
-directoryToTree path = entryToTree path ""
+directoryToTree path = entryToTree path
     where
     -- Process whether given path is a file or directory
-    entryToTree :: FilePath -> FilePath -> IO DirTree
-    entryToTree path entry = do
-        let absPath = path ++ "/" ++ entry
-        dir <- doesDirectoryExist absPath
-        if dir then subDirectoryToTree path entry else fileToTree entry
+    entryToTree :: FilePath -> IO DirTree
+    entryToTree path = do
+        dir <- doesDirectoryExist path
+        if dir then subDirectoryToTree path else fileToTree path
 
-    subDirectoryToTree :: FilePath -> FilePath -> IO DirTree
-    subDirectoryToTree pathAccum entry = do
+    subDirectoryToTree :: FilePath -> IO DirTree
+    subDirectoryToTree path = do
         -- Grabs the contents of the directory as a list, then maps
         -- directoryToTree to it to turn the entries into trees
-        let absPath = pathAccum ++ "/" ++ entry
-        entryContents <- listSubEntries absPath
+        entryNames <- listSubEntries path
+        let entryPaths = map ((path++"/")++) entryNames
 
-        let subTreesMonadic = map (entryToTree absPath) entryContents
+        let subTreesMonadic = map entryToTree entryPaths
         subTrees <- unwrapListMonads subTreesMonadic
 
-        return $ Directory entry subTrees
+        return $ Directory path subTrees
 
     fileToTree :: FilePath -> IO DirTree
     fileToTree name = return $ File 0 name
