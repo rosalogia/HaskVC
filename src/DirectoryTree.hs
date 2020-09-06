@@ -5,6 +5,7 @@ import Data.Tree
 import Data.Time
 import Data.Time.LocalTime
 import Data.List.Split
+import qualified Data.List (map)
 
 -- Debugging functions
 drawDirectoryTree :: FilePath -> IO ()
@@ -17,9 +18,17 @@ dirTreeToTree (File i s) = Node ((show i)++ " " ++ s) []
 dirTreeToTree (Directory s []) = Node s []
 dirTreeToTree (Directory s tl) = Node s (map dirTreeToTree tl)
 
+-- Turns list containing IO wrapped values into
+-- a IO wrapped list of values. 
+unwrapListMonads :: [IO a] -> IO [a]
+unwrapListMonads (m:ms) = do
+    entry <- m
+    remaining <- unwrapListMonads ms
+    return (entry:remaining)
+unwrapListMonads [] = return []
 
 -- Directory tree data structure
-data DirTree = Directory String [DirTree] | File Integer String
+data DirTree = Directory String [DirTree] | File Integer String deriving (Show)
 
 
 lastModified :: FilePath -> IO LocalTime
@@ -39,13 +48,12 @@ lastModified fpath = do
 
 -- Compares two directory trees for changes
 compareDirectoryTrees :: LocalTime -> DirTree -> FilePath -> IO ([String], [String], [String])
-compareDirectoryTrees lastCommit commitTree currentRoot = runComparison commitTree currentTree
+compareDirectoryTrees lastCommit commitTree currentRoot = currentTree >>= runComparison commitTree 
     where
         currentTree = directoryToTree currentRoot
 
         reduceUpdateTriples :: [([String], [String], [String])] -> ([String], [String], [String])
-        reduceUpdateTriples triples = foldl (\(a1,b1,c1),(a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[])
-
+        reduceUpdateTriples triples = foldl (\(a1,b1,c1) (a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[]) triples
 
         runComparison :: DirTree -> DirTree -> IO ([String], [String], [String])
         runComparison (File id1 name1) (File id2 name2) = do
@@ -54,11 +62,17 @@ compareDirectoryTrees lastCommit commitTree currentRoot = runComparison commitTr
                 return ([], [], [])
             else if name1 == name2 && lastCommit < fileModDate then
                 return ([], [name2], [])
-            else if name1 /= name2 then
+            else
                 return ([name2], [], [name1])
+
         runComparison (Directory path1 contents1) (Directory path2 contents2) = do
-            return $ reduceUpdateTriples $ map runComparison contents1 contents2
-            
+            contentComparisons <- unwrapListMonads $ Data.List.map (uncurry runComparison) (zip contents1 contents2)
+            return . reduceUpdateTriples $ contentComparisons
+
+-- return :: a -> IO a
+-- map :: ([([String], [String], [String])] -> ([String], [String], [String])) -> ([([String], [String], [String])] -> IO ([String], [String], [String]))
+-- List.map :: (DirTree, DirTree -> IO ([String], [String], [String])) -> [DirTree, DirTree] -> [IO ([String], [String], [String])]
+-- uncurry :: (DirTree -> DirTree -> IO ([String], [String], [String])) -> (DirTree, DirTree -> ...)
 
 -- Turns directory into Tree FileID
 directoryToTree :: FilePath -> IO DirTree
@@ -92,15 +106,7 @@ directoryToTree path = entryToTree path ""
         isDirectory <- doesDirectoryExist path
         if isDirectory then listDirectory path else return []
 
-    -- Turns list containing IO wrapped values into
-    -- a IO wrapped list of values. 
-    unwrapListMonads :: [IO a] -> IO [a]
-    unwrapListMonads (m:ms) = do
-        entry <- m
-        remaining <- unwrapListMonads ms
-        return (entry:remaining)
-    unwrapListMonads [] = return []
-
+    
 -- Turns path string into list of entries
 -- i.e. pathToList "/home/user" == ["home","user]
 pathToList :: FilePath -> [String]
