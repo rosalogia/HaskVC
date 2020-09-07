@@ -5,7 +5,8 @@ import Data.Tree
 import Data.Time
 import Data.Time.LocalTime
 import Data.List.Split
-import qualified Data.List (map)
+import Data.List
+import Data.Monoid
 
 -- Debugging functions
 drawDirectoryTree :: FilePath -> IO ()
@@ -14,7 +15,7 @@ drawDirectoryTree path = do
     putStrLn . drawTree . dirTreeToTree $ tree
 
 dirTreeToTree :: DirTree -> Tree String
-dirTreeToTree (File i s) = Node ((show i)++ " " ++ s) []
+dirTreeToTree (File s i) = Node ((show i)++ " " ++ s) []
 dirTreeToTree (Directory s []) = Node s []
 dirTreeToTree (Directory s tl) = Node s (map dirTreeToTree tl)
 
@@ -28,8 +29,15 @@ unwrapListMonads (m:ms) = do
 unwrapListMonads [] = return []
 
 -- Directory tree data structure
-data DirTree = Directory String [DirTree] | File Integer String deriving (Show)
-
+data DirTree
+   = Directory
+   { name :: String
+   , subdirs :: [DirTree] 
+   }
+   | File
+   { name :: String
+   , fid :: Int
+   } deriving (Show)
 
 lastModified :: FilePath -> IO LocalTime
 lastModified fpath = do 
@@ -55,9 +63,12 @@ compareDirectoryTrees lastCommit commitTree currentRoot = currentTree >>= runCom
         reduceUpdateTriples :: [([String], [String], [String])] -> ([String], [String], [String])
         reduceUpdateTriples triples = foldl (\(a1,b1,c1) (a2,b2,c2) -> (a1++a2,b1++b2,c1++c2)) ([],[],[]) triples
 
+        isFile :: DirTree -> Bool
+        isFile (File _ _) = True
+        isFile _ = False
 
         runComparison :: DirTree -> DirTree -> IO ([String], [String], [String])
-        runComparison (File id1 name1) (File id2 name2) = do
+        runComparison (File name1 id1) (File name2 id2) = do
             fileModDate <- lastModified name2
             if name1 == name2 && lastCommit >= fileModDate then
                  return ([], [], [])
@@ -65,13 +76,14 @@ compareDirectoryTrees lastCommit commitTree currentRoot = currentTree >>= runCom
                  return ([], [name2], [])
             else return ([name2], [], [name1])
         runComparison (Directory path1 contents1) (Directory path2 contents2) = do
-            contentComparisons <- unwrapListMonads $ Data.List.map (uncurry runComparison) (zip contents1 contents2)
-            return . reduceUpdateTriples $ contentComparisons
+            let oldFiles = map name $ filter isFile contents1
+            let currentFiles = map name $ filter isFile contents2
 
--- return :: a -> IO a
--- map :: ([([String], [String], [String])] -> ([String], [String], [String])) -> ([([String], [String], [String])] -> IO ([String], [String], [String]))
--- List.map :: (DirTree, DirTree -> IO ([String], [String], [String])) -> [DirTree, DirTree] -> [IO ([String], [String], [String])]
--- uncurry :: (DirTree -> DirTree -> IO ([String], [String], [String])) -> (DirTree, DirTree -> ...)
+            let deletions = [([], [], oldFiles \\ currentFiles)]
+            let creations = [(currentFiles \\ oldFiles, [], [])]
+
+            innerComparisons <- sequence $ map (uncurry runComparison) (zip contents1 contents2)
+            return . mconcat $ (creations ++ innerComparisons ++ deletions)
 
 -- Turns directory into Tree FileID
 directoryToTree :: FilePath -> IO DirTree
@@ -96,7 +108,7 @@ directoryToTree path = entryToTree path
         return $ Directory path subTrees
 
     fileToTree :: FilePath -> IO DirTree
-    fileToTree name = return $ File 0 name
+    fileToTree name = return $ File name 0
 
     -- Equivalent to doesDirectoryExist but returns [] for files
     listSubEntries :: FilePath -> IO [String]
@@ -134,7 +146,7 @@ addTreeEntry ftype p t = addEntry (pathToList p) t
 
     -- Turns a path list into a DirTree
     listToTree :: [FilePath] -> DirTree
-    listToTree (entry:[])  = if ftype then Directory entry [] else File 0 entry
+    listToTree (entry:[])  = if ftype then Directory entry [] else File entry 0
     listToTree (entry:rem) = 
         Directory (entry) [listToTree rem]
 
@@ -171,13 +183,8 @@ deleteTreeEntry p t = delEntry (pathToList p) t
         where
         helper _ _ [] = Nothing
         helper tar passed (entry:left)
-            | getNodeName entry == tar = Just (passed ++ left, entry)
-            | otherwise                = helper tar (entry:passed) left
-
-    -- Get the name of a DirTree
-    getNodeName :: DirTree -> String
-    getNodeName (Directory name _) = name
-    getNodeName (File _ name) = name
+            | name entry == tar         = Just (passed ++ left, entry)
+            | otherwise                 = helper tar (entry:passed) left
 
 
 
