@@ -1,3 +1,3 @@
 # HaskVC
 
-A local version-control tool built in Haskell
+A local version-control tool built in Haskell.
